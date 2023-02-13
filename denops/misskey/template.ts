@@ -31,3 +31,12 @@ export const note = (n: Misskey.entities.Note, prefix?: string) => {
 
   return template.map((v) => `${prefix || ""}${v}`);
 };
+
+export const createNote = () => {
+  return `---
+visibility: home # home, public, followers or specified.
+---
+
+
+`.split("\n");
+};

@@ -1,5 +1,5 @@
 import * as Misskey from "./deps/misskey-js/index.ts";
-import { isObject } from "./deps/unknownutil/mod.ts";
+import { isObject, isString, isUndefined } from "./deps/unknownutil/mod.ts";
 import { default as xdg } from "./deps/xdg/mod.ts";
 import * as path from "./deps/std/path/mod.ts";
 
@@ -71,9 +71,45 @@ const assertMisskeyTimelineBufname = (bufname: string) => {
   }
 };
 
-const isMisskeyBufname = (bufname: string) => {
+export const assertMisskeyNoteBufname = (bufname: string) => {
+  assertMisskeyBufname(bufname);
+  const [_origin, type] = bufname.slice(bufferScheme.length).split("/");
+
+  if (type !== "note") {
+    throw new Error(`'${bufname}' is not a Misskey note buffer.`);
+  }
+};
+
+export const assertMisskeyNoteCreateBufname = (bufname: string) => {
+  assertMisskeyNoteBufname(bufname);
+  const [_origin, _type, exec] = bufname.slice(bufferScheme.length).split("/");
+
+  if (exec !== "create") {
+    throw new Error(`'${bufname}' is not a Misskey create note buffer.`);
+  }
+};
+
+const assertVisibility = (visibility: unknown) => {
+  if (isUndefined(visibility)) {
+    return;
+  }
+
+  if (!isString(visibility)) {
+    throw new Error("visibility must be string or undefined.");
+  }
+
+  if (!["home", "public", "followers", "specified"].includes(visibility)) {
+    throw new Error(
+      "visibility must be one of 'home', 'public', 'followers', or 'specified'.",
+    );
+  }
+};
+
+export const isVisibility = (
+  visibility: unknown,
+): visibility is Misskey.Endpoints["notes/create"]["req"]["visibility"] => {
   try {
-    assertMisskeyBufname(bufname);
+    assertVisibility(visibility);
     return true;
   } catch {
     return false;
@@ -195,4 +231,23 @@ export const disconnectAllChannel = (
   (Object.keys(channels[origin]) as Channel[]).filter((channel) =>
     ignoreChannels.includes(channel)
   ).forEach((channel) => disconnectChannel(origin, channel));
+};
+
+const getApiClient = (origin: string) => {
+  const credential = getConfig()[origin]?.token || "";
+
+  return new Misskey.api.APIClient({
+    origin: `https://${origin}`,
+    credential,
+  });
+};
+
+export const createNote = async (
+  origin: string,
+  req: Misskey.Endpoints["notes/create"]["req"],
+) => {
+  return await getApiClient(origin).request<
+    "notes/create",
+    Misskey.Endpoints["notes/create"]["req"]
+  >("notes/create", req);
 };

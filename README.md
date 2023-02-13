@@ -5,12 +5,15 @@
 ## Feature
 
 - Browse Home / Local / Social / Global timeline.
+- Post note.
 
 ## Requirement
 
 - [vim-denops/denops.vim](https://github.com/vim-denops/denops.vim)
 
 ## Usage
+
+### Edit config
 
 Edit config file.
 
@@ -31,6 +34,8 @@ Write the following:
 }
 ```
 
+### Open timeline
+
 Open timeline buffer:
 
 ```vim
@@ -38,4 +43,18 @@ call misskey#timeline#open("misskey.io", "home")
 call misskey#timeline#open("misskey.io", "local")
 call misskey#timeline#open("misskey.io", "social")
 call misskey#timeline#open("misskey.io", "global")
+```
+
+### Post note
+
+Open post note:
+
+```vim
+call misskey#note#create#open("misskey.io")
+```
+
+Post.
+
+```vim
+call misskey#note#create#submit()
 ```
