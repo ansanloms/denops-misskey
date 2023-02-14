@@ -27,7 +27,7 @@ export async function main(denops: Denops): Promise<void> {
       helper.define(
         "BufReadCmd",
         `${bufferScheme}*/timeline/${channelType}`,
-        "setlocal ft=misskey-timeline buftype=acwrite conceallevel=3",
+        "setlocal ft=misskey-timeline conceallevel=3",
       );
 
       helper.define(
@@ -47,7 +47,7 @@ export async function main(denops: Denops): Promise<void> {
     helper.define(
       "BufReadCmd",
       `${bufferScheme}*/note/create`,
-      "setlocal ft=misskey-note buftype=nofile conceallevel=3",
+      "setlocal ft=misskey-note conceallevel=3",
     );
 
     helper.define(
