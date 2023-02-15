@@ -1,49 +1,59 @@
 import type { Denops } from "./deps/denops_std/mod.ts";
 import * as autocmd from "./deps/denops_std/autocmd/mod.ts";
+import { assertNumber, assertString } from "./deps/unknownutil/mod.ts";
 import {
-  assertMisskeyNoteCreateBufname,
+  assertTimelineChannel,
+  assertVisibility,
   bufferScheme,
-  configFilePath,
+  channelList,
   createNote,
-  disconnectAllChannel,
-  getChannelByTimeline,
-  getOriginByBufname,
-  getTimelineByBufname,
-  isMisskeyTimelineBufname,
-  isVisibility,
+  disconnectChannel,
   onNote,
-  timelineList,
 } from "./misskey.ts";
-import type { Channel, Timeline } from "./misskey.ts";
 import * as template from "./template.ts";
 import { Marked } from "./deps/markdown/mod.ts";
 
-export async function main(denops: Denops): Promise<void> {
+export async function main(denops: Denops) {
   await autocmd.group(denops, "misskey-settings", (helper) => {
     helper.remove("*");
 
-    // timeline:
-    for (const channelType of timelineList) {
+    for (
+      const [timeline, channel] of Object.entries(
+        {
+          global: channelList.globalTimeline,
+          home: channelList.homeTimeline,
+          social: channelList.hybridTimeline,
+          local: channelList.localTimeline,
+        },
+      )
+    ) {
       helper.define(
         "BufReadCmd",
-        `${bufferScheme}*/timeline/${channelType}`,
+        `${bufferScheme}*/timeline/${timeline}`,
         "setlocal ft=misskey-timeline conceallevel=3 concealcursor=nivc buftype=nofile bufhidden=wipe noswapfile",
       );
 
       helper.define(
-        "BufCreate",
-        `${bufferScheme}*/timeline/${channelType}`,
-        `call denops#notify("${denops.name}", "connectTimeline", [])`,
+        "BufReadCmd",
+        `${bufferScheme}*/timeline/${timeline}`,
+        `call denops#notify("${denops.name}", "connectTimeline", [
+          expand("<abuf>") + 0,
+          substitute(bufnr(expand("<abuf>") + 0)->bufname(), "^${bufferScheme}", "", "")->split("/")[0],
+          "${channel}"
+        ])`,
       );
 
       helper.define(
         "BufDelete",
-        `${bufferScheme}*/timeline/${channelType}`,
-        `call denops#notify("${denops.name}", "disconnectTimeline", [])`,
+        `${bufferScheme}*/timeline/${timeline}`,
+        `call denops#notify("${denops.name}", "disconnectTimeline", [
+          expand("<abuf>") + 0,
+          substitute(bufnr(expand("<abuf>") + 0)->bufname(), "^${bufferScheme}", "", "")->split("/")[0],
+          "${channel}"
+        ])`,
       );
     }
 
-    // create note:
     helper.define(
       "BufReadCmd",
       `${bufferScheme}*/note/create`,
@@ -51,9 +61,12 @@ export async function main(denops: Denops): Promise<void> {
     );
 
     helper.define(
-      "BufCreate",
+      "BufReadCmd",
       `${bufferScheme}*/note/create`,
-      `call denops#notify("${denops.name}", "setCreateNoteTemplate", [])`,
+      `call denops#notify("${denops.name}", "setNoteTemplate", [
+        expand("<abuf>") + 0,
+        substitute(bufnr(expand("<abuf>") + 0)->bufname(), "^${bufferScheme}", "", "")->split("/")[0],
+      ])`,
     );
   });
 
@@ -62,14 +75,18 @@ export async function main(denops: Denops): Promise<void> {
       return configFilePath;
     },
 
-    connectTimeline: async () => {
-      const bufname = await denops.call("bufname", "%") as string;
-      const bufnr = await denops.call("bufnr", "%") as number;
-      const origin = getOriginByBufname(bufname);
-      const timeline = getTimelineByBufname(bufname);
-      const channel = getChannelByTimeline(timeline);
+    connectTimeline: async (
+      bufnr: unknown,
+      origin: unknown,
+      channel: unknown,
+    ) => {
+      assertNumber(bufnr);
+      assertString(origin);
+      assertTimelineChannel(channel);
 
-      onNote(origin, channel, async (note) => {
+      console.log(bufnr, origin, channel);
+
+      onNote(origin, channel, bufnr, async (note) => {
         const line = Number(await denops.call("line", "."));
 
         await denops.call("appendbufline", bufnr, 0, [
@@ -88,61 +105,55 @@ export async function main(denops: Denops): Promise<void> {
       });
     },
 
-    disconnectTimeline: async () => {
-      const bufferNumberList = (await denops.eval(
-        "map(filter(copy(getbufinfo()), 'v:val.listed'), 'v:val.bufnr')",
-      )) as number[];
+    disconnectTimeline: async (
+      bufnr: unknown,
+      origin: unknown,
+      channel: unknown,
+    ) => {
+      assertNumber(bufnr);
+      assertString(origin);
+      assertTimelineChannel(channel);
 
-      const activeChannels: {
-        [origin: string]: Set<Channel>;
-      } = {};
-
-      for (const bufferNumber of bufferNumberList) {
-        const bufname = await denops.call("bufname", bufferNumber) as string;
-
-        if (isMisskeyTimelineBufname(bufname)) {
-          const origin = getOriginByBufname(bufname);
-          const timeline = getTimelineByBufname(bufname);
-          const channel = getChannelByTimeline(timeline);
-
-          if (!activeChannels[origin]) {
-            activeChannels[origin] = new Set();
-          }
-
-          activeChannels[origin].add(channel);
-        }
-      }
-
-      for (const origin in activeChannels) {
-        disconnectAllChannel(origin, [...activeChannels[origin]]);
-      }
+      disconnectChannel(origin, channel, bufnr);
     },
 
-    setCreateNoteTemplate: async () => {
-      const bufname = await denops.call("bufname", "%") as string;
-      const bufnr = await denops.call("bufnr", "%") as number;
-      assertMisskeyNoteCreateBufname(bufname);
+    setNoteTemplate: async (
+      bufnr: unknown,
+      origin: unknown,
+    ) => {
+      assertNumber(bufnr);
+      assertString(origin);
 
       await denops.call("appendbufline", bufnr, 0, [
-        ...template.createNote(),
+        ...template.createNote({ origin }),
       ]);
     },
 
-    createNote: async () => {
-      const bufname = await denops.call("bufname", "%") as string;
-      const bufnr = await denops.call("bufnr", "%") as number;
-      assertMisskeyNoteCreateBufname(bufname);
-
-      const origin = getOriginByBufname(bufname);
+    createNote: async (
+      bufnr: unknown,
+    ) => {
+      assertNumber(bufnr);
 
       const body = (await denops.call("getbufline", bufnr, 0, "$") as string[])
         .join("\n");
       const { meta } = Marked.parse(body);
+      console.log(meta);
 
-      const visibility = isVisibility(meta?.visibility)
-        ? meta.visibility
-        : undefined;
-      const text = body.replace(/^\-\-\-\n.*\n\-\-\-/g, "").trim();
+      const origin = meta?.origin;
+      assertString(origin);
+
+      const visibility = meta?.visibility;
+      if (typeof visibility !== "undefined") {
+        assertVisibility(visibility);
+      }
+
+      const sliceIndex = body.trim().split("\n").findIndex((_, i, o) =>
+        i > 1 && o[i - 1]?.trimEnd() === "---"
+      );
+
+      const text = sliceIndex < 0
+        ? body.trim()
+        : body.trim().split("\n").slice(sliceIndex).join("\n");
 
       await createNote(origin, { visibility, text });
     },

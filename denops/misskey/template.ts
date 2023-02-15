@@ -32,9 +32,17 @@ export const note = (n: Misskey.entities.Note, prefix?: string) => {
   return template.map((v) => `${prefix || ""}${v}`);
 };
 
-export const createNote = () => {
+export const createNote = (
+  options: {
+    origin: string;
+    visibility?: Misskey.Endpoints["notes/create"]["req"]["visibility"];
+  },
+) => {
   return `---
-visibility: home # home, public, followers or specified.
+origin: "${options.origin}"
+
+# home, public, followers or specified.
+visibility: ${options?.visibility || "home"}
 ---
 
 

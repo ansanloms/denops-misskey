@@ -1,6 +1,7 @@
 import * as Misskey from "./deps/misskey-js/index.ts";
 import { isObject, isString, isUndefined } from "./deps/unknownutil/mod.ts";
 import { default as xdg } from "./deps/xdg/mod.ts";
+import { assertString } from "./deps/unknownutil/mod.ts";
 import * as path from "./deps/std/path/mod.ts";
 
 export const bufferScheme = "misskey://";
@@ -9,38 +10,42 @@ export const configFilePath = path.join(
   xdg.config(),
   "denops-misskey",
   "config.json",
-) as const;
+);
 
 type Config = {
   token: string;
 };
 
-export const timelineList = ["global", "home", "social", "local"] as const;
-export type Timeline = typeof timelineList[number];
+export const channelList = {
+  globalTimeline: "globalTimeline",
+  homeTimeline: "homeTimeline",
+  hybridTimeline: "hybridTimeline",
+  localTimeline: "localTimeline",
+} as const;
 
 type Channels = {
-  globalTimeline: Misskey.ChannelConnection<{
+  [channelList.globalTimeline]: Misskey.ChannelConnection<{
     params: null;
     events: {
       note: (payload: Misskey.entities.Note) => void;
     };
     receives: null;
   }>;
-  homeTimeline: Misskey.ChannelConnection<{
+  [channelList.homeTimeline]: Misskey.ChannelConnection<{
     params: null;
     events: {
       note: (payload: Misskey.entities.Note) => void;
     };
     receives: null;
   }>;
-  hybridTimeline: Misskey.ChannelConnection<{
+  [channelList.hybridTimeline]: Misskey.ChannelConnection<{
     params: null;
     events: {
       note: (payload: Misskey.entities.Note) => void;
     };
     receives: null;
   }>;
-  localTimeline: Misskey.ChannelConnection<{
+  [channelList.localTimeline]: Misskey.ChannelConnection<{
     params: null;
     events: {
       note: (payload: Misskey.entities.Note) => void;
@@ -48,126 +53,70 @@ type Channels = {
     receives: null;
   }>;
 };
-export type Channel = keyof Channels;
+
+type Channel = typeof channelList[keyof typeof channelList];
+type TimelineChannel =
+  | typeof channelList.globalTimeline
+  | typeof channelList.homeTimeline
+  | typeof channelList.hybridTimeline
+  | typeof channelList.localTimeline;
 
 const streams: { [origin: string]: Misskey.Stream } = {};
 
 const channels: {
-  [origin: string]: Partial<Channels>;
+  [origin: string]: {
+    [key in Channel]?: {
+      channel: Channels[key];
+      useBuffers: Set<number>;
+    };
+  };
 } = {};
 
-const assertMisskeyBufname = (bufname: string) => {
-  if (bufname.slice(0, bufferScheme.length) !== bufferScheme) {
-    throw new Error(`'${bufname}' is not a Misskey buffer.`);
+export function assertChannel(x: unknown): asserts x is Channel {
+  assertString(x);
+
+  if (!Object.values<string>(channelList).includes(x)) {
+    throw new Error(`"${x}" is not expected "Channel".`);
   }
-};
+}
 
-const assertMisskeyTimelineBufname = (bufname: string) => {
-  assertMisskeyBufname(bufname);
-  const [_origin, type] = bufname.slice(bufferScheme.length).split("/");
+export function assertTimelineChannel(
+  x: unknown,
+): asserts x is TimelineChannel {
+  assertChannel(x);
 
-  if (type !== "timeline") {
-    throw new Error(`'${bufname}' is not a Misskey timline buffer.`);
+  if (
+    ![
+      channelList.globalTimeline,
+      channelList.homeTimeline,
+      channelList.hybridTimeline,
+      channelList.localTimeline,
+    ].includes(x)
+  ) {
+    throw new Error(`"${x}" is not expected "TimelineChannel".`);
   }
-};
+}
 
-export const assertMisskeyNoteBufname = (bufname: string) => {
-  assertMisskeyBufname(bufname);
-  const [_origin, type] = bufname.slice(bufferScheme.length).split("/");
+export function assertVisibility(
+  x: unknown,
+): asserts x is Misskey.Endpoints["notes/create"]["req"]["visibility"] {
+  assertString(x);
 
-  if (type !== "note") {
-    throw new Error(`'${bufname}' is not a Misskey note buffer.`);
-  }
-};
-
-export const assertMisskeyNoteCreateBufname = (bufname: string) => {
-  assertMisskeyNoteBufname(bufname);
-  const [_origin, _type, exec] = bufname.slice(bufferScheme.length).split("/");
-
-  if (exec !== "create") {
-    throw new Error(`'${bufname}' is not a Misskey create note buffer.`);
-  }
-};
-
-const assertVisibility = (visibility: unknown) => {
-  if (isUndefined(visibility)) {
-    return;
-  }
-
-  if (!isString(visibility)) {
-    throw new Error("visibility must be string or undefined.");
-  }
-
-  if (!["home", "public", "followers", "specified"].includes(visibility)) {
+  if (!["home", "public", "followers", "specified"].includes(x)) {
     throw new Error(
       "visibility must be one of 'home', 'public', 'followers', or 'specified'.",
     );
   }
-};
-
-export const isVisibility = (
-  visibility: unknown,
-): visibility is Misskey.Endpoints["notes/create"]["req"]["visibility"] => {
-  try {
-    assertVisibility(visibility);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-export const isMisskeyTimelineBufname = (bufname: string) => {
-  try {
-    assertMisskeyTimelineBufname(bufname);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-export const getOriginByBufname = (bufname: string) => {
-  assertMisskeyBufname(bufname);
-
-  const [origin] = bufname.slice(bufferScheme.length).split("/");
-
-  return origin;
-};
-
-export const getTimelineByBufname = (bufname: string) => {
-  assertMisskeyTimelineBufname(bufname);
-
-  const [_origin, _type, timeline] = bufname.slice(bufferScheme.length).split(
-    "/",
-  );
-
-  if (!timelineList.includes(timeline as Timeline)) {
-    throw new Error(`'${timeline}' is a not exists timeline.`);
-  }
-
-  return timeline as Timeline;
-};
-
-export const getChannelByTimeline = (timeline: Timeline) => {
-  if (timeline === "global") {
-    return "globalTimeline";
-  } else if (timeline === "home") {
-    return "homeTimeline";
-  } else if (timeline === "social") {
-    return "hybridTimeline";
-  } else if (timeline === "local") {
-    return "localTimeline";
-  }
-
-  throw new Error(`'${timeline}' is a not exists timeline.`);
-};
+}
 
 export const onNote = (
   origin: string,
-  channel: ReturnType<typeof getChannelByTimeline>,
-  fn: (payload: Misskey.entities.Note) => void,
+  channel: Channel,
+  bufnr: number,
+  fn: (note: Misskey.entities.Note) => void,
 ) => {
-  connectChannel(origin, channel);
-  channels[origin][channel]?.on("note", fn);
+  connectChannel(origin, channel, bufnr);
+  channels[origin][channel]?.channel.on("note", fn);
 };
 
 const getConfig = () => {
@@ -191,46 +140,52 @@ const connectStream = (origin: string) => {
 };
 
 const disconnectStream = (origin: string) => {
-  if (!streams[origin]) {
+  if (typeof streams[origin] === "undefined") {
     return;
   }
 
-  streams[origin]?.close();
+  streams[origin].close();
   delete streams[origin];
 };
 
-const connectChannel = (origin: string, channel: Channel) => {
+const connectChannel = (origin: string, channel: Channel, bufnr: number) => {
   connectStream(origin);
 
-  if (!channels[origin]) {
+  if (typeof channels[origin] === "undefined") {
     channels[origin] = {};
   }
 
-  if (!channels[origin][channel]) {
-    channels[origin][channel] = streams[origin]?.useChannel(channel);
+  if (channels[origin][channel]) {
+    channels[origin][channel]?.useBuffers.add(bufnr);
+  } else {
+    channels[origin][channel] = {
+      channel: streams[origin]?.useChannel(channel),
+      useBuffers: new Set([bufnr]),
+    };
   }
 };
 
-const disconnectChannel = (origin: string, channel: Channel) => {
-  if (!channels[origin][channel]) {
+export const disconnectChannel = (
+  origin: string,
+  channel: Channel,
+  bufnr: number,
+) => {
+  if (typeof channels[origin][channel] === "undefined") {
     return;
   }
 
-  channels[origin][channel]?.dispose();
-  delete channels[origin][channel];
-
-  if (Object.keys(channels[origin]).length <= 0) {
-    disconnectStream(origin);
+  if (channels[origin][channel]?.useBuffers.has(bufnr)) {
+    channels[origin][channel]?.useBuffers.delete(bufnr);
   }
-};
 
-export const disconnectAllChannel = (
-  origin: string,
-  ignoreChannels: Channel[] = [],
-) => {
-  (Object.keys(channels[origin]) as Channel[]).filter((channel) =>
-    ignoreChannels.includes(channel)
-  ).forEach((channel) => disconnectChannel(origin, channel));
+  if (channels[origin][channel].useBuffers.size <= 0) {
+    channels[origin][channel]?.channel.dispose();
+    delete channels[origin][channel];
+
+    if (Object.keys(channels[origin]).length <= 0) {
+      disconnectStream(origin);
+    }
+  }
 };
 
 const getApiClient = (origin: string) => {
