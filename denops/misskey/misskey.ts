@@ -178,7 +178,7 @@ export const disconnectChannel = (
     channels[origin][channel]?.useBuffers.delete(bufnr);
   }
 
-  if (channels[origin][channel].useBuffers.size <= 0) {
+  if ((channels[origin][channel]?.useBuffers.size || 0) <= 0) {
     channels[origin][channel]?.channel.dispose();
     delete channels[origin][channel];
 

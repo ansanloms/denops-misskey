@@ -40,9 +40,9 @@ export const createNote = (
 ) => {
   return `---
 origin: "${options.origin}"
-
-# home, public, followers or specified.
-visibility: ${options?.visibility || "home"}
+visibility: ${
+    options?.visibility || "home"
+  }  # home, public, followers or specified.
 ---
 
 
