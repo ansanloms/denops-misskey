@@ -1,7 +1,11 @@
 import type { Denops } from "./deps/denops_std/mod.ts";
 import * as autocmd from "./deps/denops_std/autocmd/mod.ts";
 import * as helper from "./deps/denops_std/helper/mod.ts";
-import { assertNumber, assertString } from "./deps/unknownutil/mod.ts";
+import {
+  assertNumber,
+  assertString,
+  isBoolean,
+} from "./deps/unknownutil/mod.ts";
 import {
   assertTimelineChannel,
   assertVisibility,
@@ -9,6 +13,7 @@ import {
   channelList,
   createNote,
   disconnectChannel,
+  isVisibility,
   onNote,
 } from "./misskey.ts";
 import * as template from "./template.ts";
@@ -81,6 +86,7 @@ export async function main(denops: Denops) {
       `call denops#notify("${denops.name}", "setNoteTemplate", [
         expand("<abuf>") + 0,
         substitute(bufnr(expand("<abuf>") + 0)->bufname(), "^${bufferScheme}", "", "")->split("/")[0],
+        { "visibility": get(g:, "misskey#note#create#visibility", "public"), "localOnly": get(g:, "misskey#note#create#localOnly", v:false) }
       ])`,
     );
 
@@ -151,6 +157,7 @@ export async function main(denops: Denops) {
     setNoteTemplate: async (
       bufnr: unknown,
       origin: unknown,
+      options?: unknown,
     ) => {
       assertNumber(bufnr);
       assertString(origin);
@@ -162,7 +169,15 @@ export async function main(denops: Denops) {
         "appendbufline",
         bufnr,
         0,
-        template.createNote({ origin }),
+        template.createNote({
+          origin,
+          visibility: isVisibility((options as any)?.visibility)
+            ? (options as any).visibility
+            : undefined,
+          localOnly: isBoolean((options as any)?.localOnly)
+            ? (options as any).localOnly
+            : undefined,
+        }),
       );
     },
 
@@ -184,6 +199,8 @@ export async function main(denops: Denops) {
         assertVisibility(visibility);
       }
 
+      const localOnly = meta?.localOnly === "1";
+
       const sliceIndex =
         body.trim().split("\n").findIndex((v, i) =>
           i > 1 && v.trimEnd() === "---"
@@ -192,7 +209,7 @@ export async function main(denops: Denops) {
         ? body.trim()
         : body.trim().split("\n").slice(sliceIndex).join("\n");
 
-      await createNote(origin, { visibility, text });
+      await createNote(origin, { visibility, localOnly, text });
       await denops.dispatcher.setNoteTemplate(bufnr, origin);
       await helper.echo(denops, `${origin}: Note has been created!`);
     },

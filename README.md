@@ -50,6 +50,9 @@ call misskey#timeline#open("misskey.io", "global")
 Open post note:
 
 ```vim
+let g:misskey#note#create#visibility = "public"
+let g:misskey#note#create#localOnly = v:false
+
 call misskey#note#create#open("misskey.io")
 ```
 
@@ -57,4 +60,6 @@ Post.
 
 ```vim
 call misskey#note#create#submit()
+
+" or :w
 ```

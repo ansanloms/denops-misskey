@@ -109,6 +109,17 @@ export function assertVisibility(
   }
 }
 
+export const isVisibility = (
+  x: unknown,
+): x is Misskey.Endpoints["notes/create"]["req"]["visibility"] => {
+  try {
+    assertVisibility(x);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const onNote = (
   origin: string,
   channel: Channel,

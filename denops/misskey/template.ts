@@ -36,13 +36,15 @@ export const createNote = (
   options: {
     origin: string;
     visibility?: Misskey.Endpoints["notes/create"]["req"]["visibility"];
+    localOnly?: boolean;
   },
 ) => {
   return `---
 origin: "${options.origin}"
 visibility: ${
-    options?.visibility || "home"
+    options.visibility || "home"
   }  # home, public, followers or specified.
+localOnly: ${options.localOnly ? "1" : "0"}   # 1 or 0
 ---
 
 
